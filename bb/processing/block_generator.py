@@ -26,6 +26,7 @@ class Block:
     tweet_author: str | None
     ingested_via: str         # fieldtheory | manual_link | manual_text
     summary: str              # 2-4 sentence body
+    stale: bool = False       # True if URL liveness check failed
 
 
 # ---------------------------------------------------------------------------

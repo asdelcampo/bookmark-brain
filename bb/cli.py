@@ -483,7 +483,7 @@ def maintain(freshness: bool):
     """Re-cluster, deduplicate, and optionally check URL liveness."""
     if freshness:
         from bb.maintenance.freshness import run_freshness_check
-        console.print("Checking URL liveness…")
+        console.print("Checking URL liveness…\n")
         report = run_freshness_check(verbose=True)
         console.print(
             f"\nChecked [bold]{report.checked}[/bold] URLs — "
@@ -491,34 +491,68 @@ def maintain(freshness: bool):
             f"[red]{report.dead} dead[/red], "
             f"[dim]{report.skipped} skipped[/dim]"
         )
+        if report.newly_stale:
+            console.print(f"\n[red]Newly marked stale ({len(report.newly_stale)}):[/red]")
+            for bid in report.newly_stale:
+                console.print(f"  {bid}")
+        if report.already_stale:
+            console.print(f"\n[dim]Already stale ({len(report.already_stale)}): {', '.join(report.already_stale)}[/dim]")
     else:
-        from bb.maintenance.health_check import run_maintenance
-        console.print("Running maintenance (dedup → recluster → LLM analysis)…\n")
+        from bb.maintenance.health_check import run_maintenance, apply_tag_suggestion
+        console.print("Running maintenance (dedup → LLM analysis)…\n")
         report = run_maintenance()
 
         console.print(f"  Duplicates removed:  [cyan]{report.duplicates_removed}[/cyan]")
-        console.print(f"  Re-clustered:        [cyan]{report.reclustered}[/cyan]")
-        console.print(f"  Tags added:          [cyan]{report.tags_added}[/cyan]")
 
         if report.analysis:
             a = report.analysis
-            console.print(f"\n[bold]LLM analysis[/bold]")
+
             if a.summary:
-                console.print(f"  {a.summary}")
+                console.print(f"\n[bold]Analysis[/bold]")
+                console.print(Panel(a.summary, border_style="dim", padding=(0, 1)))
+
             if a.potential_dupes:
-                console.print(f"\n  [yellow]Potential duplicates ({len(a.potential_dupes)}):[/yellow]")
-                for pair in a.potential_dupes[:5]:
-                    console.print(f"    {' / '.join(pair)}")
+                console.print(f"\n[bold yellow]Potential duplicates[/bold yellow] ({len(a.potential_dupes)})")
+                for pair in a.potential_dupes:
+                    console.print(f"  {' / '.join(pair)}")
+
             if a.cross_references:
-                console.print(f"\n  [yellow]Cross-reference clusters ({len(a.cross_references)}):[/yellow]")
-                for xref in a.cross_references[:5]:
+                console.print(f"\n[bold yellow]Cross-reference clusters[/bold yellow] ({len(a.cross_references)})")
+                for xref in a.cross_references:
                     ids = ", ".join(xref.get("ids", []))
                     reason = xref.get("reason", "")
-                    console.print(f"    [{ids}] — {reason}")
+                    console.print(f"  [{ids}] — {reason}")
+
             if a.gaps:
-                console.print(f"\n  [yellow]Gaps identified:[/yellow]")
+                console.print(f"\n[bold yellow]Gaps identified[/bold yellow]")
                 for gap in a.gaps:
-                    console.print(f"    • {gap}")
+                    console.print(f"  • {gap}")
+
+            # Interactive tag suggestions
+            if a.tag_suggestions:
+                console.print(
+                    f"\n[bold]Tag suggestions[/bold] — {len(a.tag_suggestions)} item(s). "
+                    f"Review each and press [bold]y[/bold] to apply or [bold]n[/bold] to skip.\n"
+                )
+                total_added = 0
+                for sug in a.tag_suggestions:
+                    block_id = sug.get("id", "")
+                    new_tags = sug.get("add_tags") or []
+                    if not block_id or not new_tags:
+                        continue
+                    tag_str = ", ".join(f"[green]{t}[/green]" for t in new_tags)
+                    console.print(f"  [cyan]{block_id}[/cyan] ← add {tag_str}")
+                    if click.confirm("  Apply?", default=False):
+                        added = apply_tag_suggestion(sug)
+                        total_added += added
+                        if added:
+                            console.print(f"    [green]✓[/green] {added} tag(s) added.")
+                        else:
+                            console.print(f"    [dim]Already present, skipped.[/dim]")
+                    else:
+                        console.print(f"    [dim]Skipped.[/dim]")
+                if total_added:
+                    console.print(f"\n  Total tags added: [cyan]{total_added}[/cyan]")
 
         for err in report.errors:
             console.print(f"  [red]error:[/red] {err}")
@@ -532,7 +566,8 @@ def maintain(freshness: bool):
 @cli.command()
 @click.option("--days", default=7, show_default=True, help="Look-back window in days.")
 def digest(days: int):
-    """Generate a 'what's new' summary of recent blocks."""
+    """Generate a 'what's new' digest of recent blocks grouped by category."""
+    from collections import Counter
     from bb.maintenance.digest import generate_digest
     from bb.storage.block_store import iter_all_blocks
 
@@ -547,14 +582,26 @@ def digest(days: int):
         console.print(f"No blocks added in the last {days} days.")
         return
 
-    console.rule(f"[bold]Last {days} days[/bold] — {len(recent)} block(s)")
-    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
-    table.add_column("Date", style="dim", width=12)
-    table.add_column("Cat", style="yellow", width=10)
-    table.add_column("Title")
+    # Grouped table by category
+    by_cat: dict[str, list] = {}
     for b in recent:
-        table.add_row(b.created, b.category, b.title)
-    console.print(table)
+        by_cat.setdefault(b.category, []).append(b)
+
+    console.rule(f"[bold]Last {days} days[/bold] — {len(recent)} block(s)")
+    for cat, blocks in sorted(by_cat.items()):
+        table = Table(
+            title=f"[yellow]{cat}[/yellow] ({len(blocks)})",
+            box=box.SIMPLE,
+            show_header=False,
+            padding=(0, 1),
+            title_justify="left",
+        )
+        table.add_column("ID", style="cyan", no_wrap=True, width=8)
+        table.add_column("Title")
+        table.add_column("Date", style="dim", width=12)
+        for b in blocks:
+            table.add_row(b.id, b.title, b.created)
+        console.print(table)
 
     console.rule("[bold]Summary[/bold]")
     console.print(generate_digest(days))

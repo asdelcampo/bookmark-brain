@@ -1,10 +1,8 @@
 """URL liveness checks — flag blocks whose source URLs are dead."""
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, field
 
-from bb.config import STALE_DAYS
 from bb.ingestion.scraper import check_liveness
 from bb.processing.block_generator import Block
 from bb.storage import block_store, search_index
@@ -13,14 +11,23 @@ from bb.storage.block_store import write_block
 
 @dataclass
 class FreshnessReport:
-    checked: int
-    alive: int
-    dead: int
-    skipped: int
+    checked: int = 0
+    alive: int = 0
+    dead: int = 0
+    skipped: int = 0
+    newly_stale: list[str] = field(default_factory=list)   # block IDs marked stale this run
+    already_stale: list[str] = field(default_factory=list) # block IDs already flagged
 
 
 def run_freshness_check(verbose: bool = False) -> FreshnessReport:
-    report = FreshnessReport(checked=0, alive=0, dead=0, skipped=0)
+    """
+    HEAD-check every block that has a real URL.
+
+    Blocks that fail (404, timeout, connection error) get ``stale: true``
+    written to their frontmatter.  Blocks already marked stale are
+    rechecked — if the URL recovers, the flag is cleared.
+    """
+    report = FreshnessReport()
     blocks = list(block_store.iter_all_blocks())
 
     for block in blocks:
@@ -31,20 +38,33 @@ def run_freshness_check(verbose: bool = False) -> FreshnessReport:
 
         report.checked += 1
         alive = check_liveness(url)
+
         if alive:
             report.alive += 1
+            if block.stale:
+                # URL recovered — clear the flag
+                block.stale = False
+                write_block(block)
+                search_index.upsert_block(block)
+                if verbose:
+                    print(f"  ALIVE (recovered)  {block.id}: {url}")
         else:
             report.dead += 1
-            _mark_stale(block)
-            if verbose:
-                print(f"  DEAD  {block.id}: {url}")
+            if block.stale:
+                report.already_stale.append(block.id)
+                if verbose:
+                    print(f"  DEAD  (already flagged)  {block.id}: {url}")
+            else:
+                _mark_stale(block)
+                report.newly_stale.append(block.id)
+                if verbose:
+                    print(f"  DEAD  (newly flagged)  {block.id}: {url}")
 
     return report
 
 
 def _mark_stale(block: Block) -> None:
-    """Append a [STALE] marker to the context so it shows in searches."""
-    if "[STALE]" not in block.context:
-        block.context = f"[STALE] {block.context}"
+    """Set ``stale: true`` in the block's frontmatter."""
+    block.stale = True
     write_block(block)
     search_index.upsert_block(block)

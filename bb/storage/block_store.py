@@ -155,6 +155,8 @@ def _block_to_frontmatter(block: Block) -> frontmatter.Post:
         "tweet_author": block.tweet_author,
         "ingested_via": block.ingested_via,
     }
+    if block.stale:
+        meta["stale"] = True
     return frontmatter.Post(block.summary, **meta)
 
 
@@ -174,6 +176,7 @@ def _post_to_block(post: frontmatter.Post, file_id: str | None = None) -> Block:
         tweet_author=m.get("tweet_author"),
         ingested_via=m.get("ingested_via", ""),
         summary=post.content,
+        stale=bool(m.get("stale", False)),
     )
 
 
