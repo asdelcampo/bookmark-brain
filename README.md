@@ -61,11 +61,35 @@ BB_LLM_URL=http://localhost:8001/v1
 BB_MODEL=gemma-4-e2b
 ```
 
-Start llama-server with your GGUF model:
+Build llama.cpp once (it's a runtime dependency, not tracked in this repo):
 
 ```bash
-llama-server --port 8001 -m /path/to/gemma-4-e2b-Q8_0.gguf
+git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp
+cd ~/llama.cpp
+cmake -B build -DLLAMA_METAL=ON
+cmake --build build --config Release -j$(nproc)
 ```
+
+### Startup sequence
+
+**Terminal 1 — LLM server:**
+
+```bash
+./scripts/start-llm.sh
+```
+
+Wait for: `llama server listening at http://0.0.0.0:8001`
+
+**Terminal 2 — bb CLI:**
+
+```bash
+source venv/bin/activate
+bb <command>
+```
+
+Health check: `curl http://localhost:8001/health` → `{"status":"ok"}`
+
+> See `RESUME.md` for a quick-start cheatsheet.
 
 ---
 

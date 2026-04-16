@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .env
 venv/
+llama.cpp/
+models/
+.DS_Store
+bookmark_brain.egg-info/
