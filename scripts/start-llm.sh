@@ -16,6 +16,7 @@ fi
 
 echo "Starting llama-server with Gemma 4 E2B (Q4_K_M, 8GB-safe)..."
 "$LLAMA_BIN" \
-  -hf unsloth/gemma-4-E2B-it-GGUF:Q4_K_M \
+  -hf unsloth/gemma-4-E2B-it-GGUF \
+  -hff gemma-4-E2B-it-Q4_K_M.gguf \
   --ctx-size 2048 \
   --port 8001

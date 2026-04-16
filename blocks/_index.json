@@ -592,5 +592,32 @@
       "ai coding"
     ],
     "category": "tools"
+  },
+  {
+    "id": "d7716",
+    "context": "Multica Autopilot is a framework that allows users to run complex code routines entirely locally by integrating with various open-source AI agents like Codex or Hermes.",
+    "tags": [
+      "ai agents",
+      "local execution",
+      "open source",
+      "coding automation",
+      "llm",
+      "software development"
+    ],
+    "category": "tools"
+  },
+  {
+    "id": "e18f0",
+    "context": "This technique demonstrates how to use scheduling features to automate the daily exposure or testing of specific AI system prompts, aiding in prompt engineering and system prompt analysis.",
+    "tags": [
+      "anthropicai",
+      "systemprompt",
+      "promptengineering",
+      "automation",
+      "cronjob",
+      "claude",
+      "ai"
+    ],
+    "category": "methods"
   }
 ]
