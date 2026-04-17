@@ -210,14 +210,14 @@ The project runs entirely local — no cloud APIs, no data leaving the machine. 
 
 | Model | Runtime | Quantization | Size | Outcome |
 |---|---|---|---|---|
-| `gemma4:e4b` (4B) | Ollama | Q4_K_M | 9.6 GB | Too slow; halved ingestion speed vs current |
-| `gemma-4-E2B` (2B) | llama.cpp | Q8_0 | ~5.6 GB | Froze machine — exhausted 8GB RAM |
+| `gemma4:e4b` (4B) | Ollama | Q4_K_M | 9.6 GB | Discarded — felt sluggish during ingestion, output quality acceptable but response felt heavy for the task |
+| `gemma-4-E2B` (2B) | llama.cpp | Q8_0 | ~5.6 GB | Discarded — exhausted 8GB RAM and froze the machine |
 | `gemma-4-E2B` (2B) | llama.cpp | Q4_K_M | ~2.5 GB | **Current** — fits in 8GB, GPU-accelerated via Metal |
 
 ### Why Gemma 4 E2B Q4_K_M
 
 - **Fits in 8GB RAM** — Q4_K_M (~2.5GB weights) leaves enough headroom for macOS and the Python process. Q8_0 of the same model crashed the machine.
-- **Roughly 2× faster ingestion than the 4B model** — switching from `gemma4:e4b` via Ollama to this 2B model via llama.cpp cut per-bookmark processing time in half. The combination of a smaller model and llama.cpp's Metal GPU offload (vs Ollama's CPU-heavy path on M1) accounts for the difference.
+- **Responsive during ingestion** — the 2B model via llama.cpp with Metal GPU offload feels noticeably snappier than the 4B model via Ollama did. No benchmarks were run; this is based on experienced usage.
 - **Quality is sufficient** — ingestion tasks (summarise, tag, extract context) don't need a large model. Output quality at 2B Q4_K_M is indistinguishable from 4B for this workload.
 - **llama.cpp over Ollama** — direct Metal GPU offload, no daemon overhead, and the `-hf` flag pulls GGUF files straight from Hugging Face without a separate model management layer.
 
